@@ -14,6 +14,7 @@
       justify-content: center;
       height: 100vh;
       margin: 0;
+      background: url('bulutlar.webp') center center / cover no-repeat fixed;
     }
     .button {
       padding: 16px 32px;
@@ -64,10 +65,67 @@
       color: #2563eb;
       margin-top: 16px;
     }
+    /* Modern toggle switch */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 54px;
+      height: 28px;
+    }
+    .switch input { display: none; }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: #ccc;
+      border-radius: 28px;
+      transition: .4s;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 22px;
+      width: 22px;
+      left: 3px;
+      bottom: 3px;
+      background: #fff;
+      border-radius: 50%;
+      transition: .4s;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+    }
+    input:checked + .slider {
+      background: #4f8cff;
+    }
+    input:checked + .slider:before {
+      transform: translateX(26px);
+    }
+    .toggle-label {
+      margin-left: 12px;
+      font-size: 1.1rem;
+      vertical-align: middle;
+      user-select: none;
+    }
   </style>
 </head>
 <body>
   <button class="button" id="showBtn">siteyi yapan kişiyi görmek için bu butona bas</button>
+
+  <div style="margin: 20px 0; display: flex; flex-direction: column; gap: 12px; align-items: flex-start;">
+    <label style="display: flex; align-items: center; gap: 8px; font-size: 1.1rem;">
+      <span class="toggle-label">uçak</span>
+      <span class="switch">
+        <input type="checkbox" id="planeToggle" />
+        <span class="slider"></span>
+      </span>
+    </label>
+    <label style="display: flex; align-items: center; gap: 8px; font-size: 1.1rem;">
+      <span class="toggle-label">füze</span>
+      <span class="switch">
+        <input type="checkbox" id="missileToggle" />
+        <span class="slider"></span>
+      </span>
+    </label>
+  </div>
 
   <div class="modal" id="modal">
     <div class="modal-content">
@@ -76,20 +134,229 @@
     </div>
   </div>
 
+  <!-- Uçak animasyonları için SVG konteyneri -->
+  <div id="planesContainer" style="position: fixed; left: 0; top: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 100;"></div>
+
   <!-- canvas-confetti CDN -->
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <!-- Ses efektleri için CDN -->
+  <audio id="celebrateSound" src="https://cdn.pixabay.com/audio/2022/07/26/audio_124bfae3b2.mp3" preload="auto"></audio>
+  <audio id="planeSound" src="https://cdn.pixabay.com/audio/2022/03/15/audio_115b9b273b.mp3" preload="auto"></audio>
   <script>
     const showBtn = document.getElementById('showBtn');
     const modal = document.getElementById('modal');
     const closeBtn = document.getElementById('closeBtn');
+    const planeToggle = document.getElementById('planeToggle');
+    const missileToggle = document.getElementById('missileToggle');
+    const planesContainer = document.getElementById('planesContainer');
+    const celebrateSound = document.getElementById('celebrateSound');
+    const planeSound = document.getElementById('planeSound');
 
+    function randomBetween(a, b) {
+      return a + Math.random() * (b - a);
+    }
+
+    function createTopViewPlaneSVG() { return ""; } // SVG kullanılmayacak
+
+    let planeAnimationActive = false;
+    let planeAnimationIds = [];
+
+    function startPlanesOnEllipse() {
+      planesContainer.innerHTML = '';
+      planeAnimationActive = true;
+      planeAnimationIds = [];
+      const planeCount = 4;
+      // Her uçak için rastgele yörünge parametreleri
+      const orbits = Array.from({length: planeCount}).map(() => ({
+        a: randomBetween(window.innerWidth/3, window.innerWidth/2.1),
+        b: randomBetween(window.innerHeight/4, window.innerHeight/2.5),
+        cx: window.innerWidth/2 + randomBetween(-100, 100),
+        cy: window.innerHeight/2 + randomBetween(-80, 80),
+        baseAngle: randomBetween(0, 2*Math.PI),
+        speed: 0.7 + Math.random() * 0.5,
+        waveAmp: randomBetween(10, 40),
+        waveFreq: randomBetween(1, 3)
+      }));
+      for (let i = 0; i < planeCount; i++) {
+        const plane = document.createElement('img');
+        plane.src = 'uçak.png';
+        plane.alt = 'uçak';
+        plane.style.position = 'absolute';
+        plane.style.width = '64px';
+        plane.style.height = '64px';
+        plane.style.pointerEvents = 'none';
+        plane.style.zIndex = '200';
+        plane.style.transition = 'filter 0.2s';
+        planesContainer.appendChild(plane);
+        const orbit = orbits[i];
+        function animatePlane(ts) {
+          if (!planeAnimationActive) return;
+          const t = ((performance.now() / 1000) * orbit.speed + orbit.baseAngle) % (2 * Math.PI);
+          // Eliptik + dalgalı yörünge
+          const wave = Math.sin(t * orbit.waveFreq) * orbit.waveAmp;
+          const x = orbit.cx + (orbit.a + wave) * Math.cos(t) - 32;
+          const y = orbit.cy + (orbit.b + wave) * Math.sin(t) - 32;
+          plane.style.left = `${x}px`;
+          plane.style.top = `${y}px`;
+          // Uçuş yönü: elipsin teğeti (türev)
+          const dx = -(orbit.a + wave) * Math.sin(t) + Math.cos(t) * orbit.waveAmp * orbit.waveFreq * Math.cos(t * orbit.waveFreq);
+          const dy = (orbit.b + wave) * Math.cos(t) + Math.sin(t) * orbit.waveAmp * orbit.waveFreq * Math.cos(t * orbit.waveFreq);
+          const angleDeg = Math.atan2(dy, dx) * 180 / Math.PI + 45;
+          plane.style.transform = `rotate(${angleDeg}deg)`;
+          planeAnimationIds[i] = requestAnimationFrame(animatePlane);
+        }
+        planeAnimationIds[i] = requestAnimationFrame(animatePlane);
+      }
+    }
+
+    function stopPlanesOnEllipse() {
+      planeAnimationActive = false;
+      planeAnimationIds.forEach(id => cancelAnimationFrame(id));
+      planesContainer.innerHTML = '';
+    }
+
+    let animationStarted = false;
+
+    // Füze animasyonu için parametreler
+    let missileEl = null;
+    let missileOrbit = null;
+    let missileAnimId = null;
+    let missileRespawnTimeout = null;
+    let missileSpeed = 0;
+    let missileT = 0;
+    let missileActive = false;
+
+    function startMissile() {
+      if (missileEl) missileEl.remove();
+      if (missileAnimId) cancelAnimationFrame(missileAnimId);
+      missileEl = document.createElement('img');
+      missileEl.src = 'füze2.png';
+      missileEl.alt = 'füze';
+      missileEl.style.position = 'absolute';
+      missileEl.style.width = '48px';
+      missileEl.style.height = '48px';
+      missileEl.style.pointerEvents = 'none';
+      missileEl.style.zIndex = '220';
+      missileEl.style.transition = 'filter 0.2s';
+      planesContainer.appendChild(missileEl);
+      // Füze yılan gibi kıvrımlı ve dönen bir yörüngede, köşeden yavaş başlayıp hızlanacak
+      missileOrbit = {
+        a: randomBetween(window.innerWidth/3, window.innerWidth/2.1),
+        b: randomBetween(window.innerHeight/4, window.innerHeight/2.5),
+        cx: window.innerWidth/2 + randomBetween(-100, 100),
+        cy: window.innerHeight/2 + randomBetween(-80, 80),
+        baseAngle: randomBetween(0, 2*Math.PI),
+        waveAmp: randomBetween(30, 60),
+        waveFreq: randomBetween(2, 4),
+        t: 0,
+        speed: 0.002, // hız tekrar yarı yarıya azaltıldı
+        maxSpeed: 0.002 // sabit hız
+      };
+      missileT = 0;
+      missileSpeed = missileOrbit.speed;
+      missileActive = true;
+      animateMissile();
+    }
+
+    function animateMissile() {
+      if (!missileActive) return;
+      missileT += missileOrbit.speed;
+      // Füze yılan gibi kıvrımlı ve dönen bir yörüngede hareket etsin
+      const t = missileOrbit.baseAngle + missileT * 2 * Math.PI; // tam tur
+      const wave = Math.sin(t * missileOrbit.waveFreq) * missileOrbit.waveAmp;
+      const x = missileOrbit.cx + (missileOrbit.a + wave) * Math.cos(t) - 24;
+      const y = missileOrbit.cy + (missileOrbit.b + wave) * Math.sin(t) - 24;
+      missileEl.style.left = `${x}px`;
+      missileEl.style.top = `${y}px`;
+      // Füzenin yönü: hareket yönüne bakacak
+      const dx = -(missileOrbit.a + wave) * Math.sin(t) + Math.cos(t) * missileOrbit.waveAmp * missileOrbit.waveFreq * Math.cos(t * missileOrbit.waveFreq);
+      const dy = (missileOrbit.b + wave) * Math.cos(t) + Math.sin(t) * missileOrbit.waveAmp * missileOrbit.waveFreq * Math.cos(t * missileOrbit.waveFreq);
+      const angleDeg = Math.atan2(dy, dx) * 180 / Math.PI + 90;
+      missileEl.style.transform = `rotate(${angleDeg}deg)`;
+      // Çarpışma kontrolü
+      if (planeAnimationActive) {
+        const planes = Array.from(planesContainer.querySelectorAll('img')).filter(img => img.src.includes('uçak.png'));
+        for (const plane of planes) {
+          const px = parseFloat(plane.style.left) + 32;
+          const py = parseFloat(plane.style.top) + 32;
+          const mx = x + 24;
+          const my = y + 24;
+          const dist = Math.sqrt((px - mx) ** 2 + (py - my) ** 2);
+          if (dist < 48) {
+            // Patlama efekti oluştur
+            const explosion = document.createElement('div');
+            explosion.innerHTML = `<svg width='60' height='60' viewBox='0 0 60 60'><circle cx='30' cy='30' r='18' fill='orange' opacity='0.7'/><circle cx='30' cy='30' r='10' fill='yellow' opacity='0.8'/><circle cx='30' cy='30' r='4' fill='white' opacity='0.9'/></svg>`;
+            explosion.style.position = 'absolute';
+            explosion.style.left = `${mx - 30}px`;
+            explosion.style.top = `${my - 30}px`;
+            explosion.style.pointerEvents = 'none';
+            explosion.style.zIndex = '999';
+            planesContainer.appendChild(explosion);
+            setTimeout(() => explosion.remove(), 500);
+            // Füze ve uçağı yok et
+            plane.remove();
+            missileEl.remove();
+            missileActive = false;
+            missileRespawnTimeout = setTimeout(() => {
+              startMissile();
+            }, 1000);
+            return;
+          }
+        }
+      }
+      if (missileActive) {
+        missileAnimId = requestAnimationFrame(animateMissile);
+      }
+    }
+
+    function stopMissile() {
+      missileActive = false;
+      if (missileEl) missileEl.remove();
+      if (missileAnimId) cancelAnimationFrame(missileAnimId);
+      if (missileRespawnTimeout) clearTimeout(missileRespawnTimeout);
+    }
+
+    // Toggle mantığı
+    planeToggle.onchange = function() {
+      if (animationStarted && planeToggle.checked) {
+        startPlanesOnEllipse();
+      } else {
+        stopPlanesOnEllipse();
+      }
+    };
+    missileToggle.onchange = function() {
+      if (animationStarted && missileToggle.checked) {
+        startMissile();
+      } else {
+        stopMissile();
+      }
+    };
+
+    // Başlangıçta hiçbir animasyon başlamasın
+    stopPlanesOnEllipse();
+    stopMissile();
+
+    // Butona basınca animasyonlar başlasın
     showBtn.onclick = function() {
+      animationStarted = true;
       modal.classList.add('active');
       confetti({
         particleCount: 120,
         spread: 90,
         origin: { y: 0.6 }
       });
+      celebrateSound.currentTime = 0;
+      celebrateSound.play().catch(()=>{});
+      if (planeToggle.checked) {
+        startPlanesOnEllipse();
+      }
+      if (missileToggle.checked) {
+        startMissile();
+      }
+      if (planeToggle.checked) {
+        planeSound.currentTime = 0;
+        planeSound.play().catch(()=>{});
+      }
     };
     closeBtn.onclick = function() {
       modal.classList.remove('active');
