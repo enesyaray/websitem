@@ -125,6 +125,13 @@
         <span class="slider"></span>
       </span>
     </label>
+    <label id="controlLabel" style="display: none; align-items: center; gap: 8px; font-size: 1.1rem;">
+      <span class="toggle-label">kontrol</span>
+      <span class="switch">
+        <input type="checkbox" id="controlToggle" />
+        <span class="slider"></span>
+      </span>
+    </label>
   </div>
 
   <div class="modal" id="modal">
@@ -142,6 +149,20 @@
   <!-- Ses efektleri için CDN -->
   <audio id="celebrateSound" src="https://cdn.pixabay.com/audio/2022/07/26/audio_124bfae3b2.mp3" preload="auto"></audio>
   <audio id="planeSound" src="https://cdn.pixabay.com/audio/2022/03/15/audio_115b9b273b.mp3" preload="auto"></audio>
+  <div id="hamburger" style="position: fixed; top: 18px; left: 18px; z-index: 2000; cursor: pointer; width: 36px; height: 36px; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+    <div style="width: 28px; height: 4px; background: #222; margin: 3px 0; border-radius: 2px;"></div>
+    <div style="width: 28px; height: 4px; background: #222; margin: 3px 0; border-radius: 2px;"></div>
+    <div style="width: 28px; height: 4px; background: #222; margin: 3px 0; border-radius: 2px;"></div>
+  </div>
+  <div id="sideMenu" style="position: fixed; top: 0; left: 0; width: 220px; height: 100vh; background: rgba(255,255,255,0.97); box-shadow: 2px 0 16px rgba(0,0,0,0.08); z-index: 2100; display: none; flex-direction: column; padding-top: 60px;">
+    <button id="menuMain" style="background: none; border: none; font-size: 1.1rem; padding: 18px 24px; text-align: left; cursor: pointer;">Bu siteyi yapan kişi</button>
+    <button id="menuAbisi" style="background: none; border: none; font-size: 1.1rem; padding: 18px 24px; text-align: left; cursor: pointer;">Bu siteyi yapan kişinin abisi</button>
+  </div>
+  <div id="abisiPage" style="display: none; position: fixed; inset: 0; z-index: 1500; background: url('cayir.jpg') center center / cover no-repeat fixed; flex-direction: column; justify-content: flex-end; align-items: center;">
+    <img id="atAnim" src="at.png" alt="at" style="display:none; position:absolute; left:-300px; bottom:220px; width:160px; height:auto; z-index:2001; pointer-events:none; transition:none;" />
+    <div id="abisiName" style="display:none; color:#fff; font-size:2.5rem; font-weight:bold; text-shadow:0 2px 16px #222; margin-bottom: 80px;">Eyüp Yaray</div>
+    <button id="abisiBtn" style="margin-bottom: 40px; background: #22c55e; color: #fff; font-size: 1.1rem; padding: 18px 32px; border: none; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); cursor: pointer;">bu siteyi yapan kişinin abisini görmek için tıkla</button>
+  </div>
   <script>
     const showBtn = document.getElementById('showBtn');
     const modal = document.getElementById('modal');
@@ -151,6 +172,10 @@
     const planesContainer = document.getElementById('planesContainer');
     const celebrateSound = document.getElementById('celebrateSound');
     const planeSound = document.getElementById('planeSound');
+    const controlLabel = document.getElementById('controlLabel');
+    const controlToggle = document.getElementById('controlToggle');
+    const abisiName = document.getElementById('abisiName');
+    const atAnim = document.getElementById('atAnim');
 
     function randomBetween(a, b) {
       return a + Math.random() * (b - a);
@@ -160,6 +185,17 @@
 
     let planeAnimationActive = false;
     let planeAnimationIds = [];
+
+    // Uçaklardan biri kontrol edilebilecek kırmızı uçak olacak
+    let controlledPlane = null;
+    let controlledPlaneIndex = 0;
+    let controlPos = { x: 0, y: 0 };
+    let controlActive = false;
+    let controlAnimId = null;
+    let controlledPlaneAnimId = null;
+    let controlledPlaneOrbit = null;
+    let controlledPlaneOrbitIndex = 0;
+    let controlledPlaneAngularVelocity = 0;
 
     function startPlanesOnEllipse() {
       planesContainer.innerHTML = '';
@@ -189,18 +225,31 @@
         plane.style.transition = 'filter 0.2s';
         planesContainer.appendChild(plane);
         const orbit = orbits[i];
+        if (controlActive && i === 0) {
+          controlledPlaneOrbitIndex = i;
+          controlledPlaneOrbit = orbit;
+          controlledPlane = plane;
+          controlledPlaneIndex = 0;
+          controlledPlane.style.filter = 'drop-shadow(0 0 8px #f00) saturate(2)';
+          controlledPlane.style.zIndex = '300';
+        }
         function animatePlane(ts) {
           if (!planeAnimationActive) return;
-          const t = ((performance.now() / 1000) * orbit.speed + orbit.baseAngle) % (2 * Math.PI);
-          // Eliptik + dalgalı yörünge
-          const wave = Math.sin(t * orbit.waveFreq) * orbit.waveAmp;
-          const x = orbit.cx + (orbit.a + wave) * Math.cos(t) - 32;
-          const y = orbit.cy + (orbit.b + wave) * Math.sin(t) - 32;
+          // Eğer bu kontrollü uçaksa, baseAngle'ı güncel tut
+          let thisOrbit = orbit;
+          if (controlActive && i === controlledPlaneOrbitIndex) {
+            thisOrbit = controlledPlaneOrbit;
+            // Dönme hızı uygula
+            thisOrbit.baseAngle += controlledPlaneAngularVelocity;
+          }
+          const t = ((performance.now() / 1000) * thisOrbit.speed + thisOrbit.baseAngle) % (2 * Math.PI);
+          const wave = Math.sin(t * thisOrbit.waveFreq) * thisOrbit.waveAmp;
+          const x = thisOrbit.cx + (thisOrbit.a + wave) * Math.cos(t) - 32;
+          const y = thisOrbit.cy + (thisOrbit.b + wave) * Math.sin(t) - 32;
           plane.style.left = `${x}px`;
           plane.style.top = `${y}px`;
-          // Uçuş yönü: elipsin teğeti (türev)
-          const dx = -(orbit.a + wave) * Math.sin(t) + Math.cos(t) * orbit.waveAmp * orbit.waveFreq * Math.cos(t * orbit.waveFreq);
-          const dy = (orbit.b + wave) * Math.cos(t) + Math.sin(t) * orbit.waveAmp * orbit.waveFreq * Math.cos(t * orbit.waveFreq);
+          const dx = -(thisOrbit.a + wave) * Math.sin(t) + Math.cos(t) * thisOrbit.waveAmp * thisOrbit.waveFreq * Math.cos(t * thisOrbit.waveFreq);
+          const dy = (thisOrbit.b + wave) * Math.cos(t) + Math.sin(t) * thisOrbit.waveAmp * thisOrbit.waveFreq * Math.cos(t * thisOrbit.waveFreq);
           const angleDeg = Math.atan2(dy, dx) * 180 / Math.PI + 45;
           plane.style.transform = `rotate(${angleDeg}deg)`;
           planeAnimationIds[i] = requestAnimationFrame(animatePlane);
@@ -277,22 +326,35 @@
       if (planeAnimationActive) {
         const planes = Array.from(planesContainer.querySelectorAll('img')).filter(img => img.src.includes('uçak.png'));
         for (const plane of planes) {
-          const px = parseFloat(plane.style.left) + 32;
-          const py = parseFloat(plane.style.top) + 32;
-          const mx = x + 24;
-          const my = y + 24;
-          const dist = Math.sqrt((px - mx) ** 2 + (py - my) ** 2);
-          if (dist < 48) {
-            // Patlama efekti oluştur
-            const explosion = document.createElement('div');
-            explosion.innerHTML = `<svg width='60' height='60' viewBox='0 0 60 60'><circle cx='30' cy='30' r='18' fill='orange' opacity='0.7'/><circle cx='30' cy='30' r='10' fill='yellow' opacity='0.8'/><circle cx='30' cy='30' r='4' fill='white' opacity='0.9'/></svg>`;
+          // AABB (dikdörtgen çakışması) ile çarpışma kontrolü
+          const planeRect = plane.getBoundingClientRect();
+          const missileRect = missileEl.getBoundingClientRect();
+          const overlap = !(
+            planeRect.right < missileRect.left ||
+            planeRect.left > missileRect.right ||
+            planeRect.bottom < missileRect.top ||
+            planeRect.top > missileRect.bottom
+          );
+          console.log('Çarpışma testi:', {
+            plane: planeRect,
+            missile: missileRect,
+            overlap
+          });
+          if (overlap) {
+            console.log('Çarpışma!');
+            // Patlama efekti PNG ile göster
+            const explosion = document.createElement('img');
+            explosion.src = 'patlama efekti.png';
+            explosion.alt = 'patlama';
             explosion.style.position = 'absolute';
-            explosion.style.left = `${mx - 30}px`;
-            explosion.style.top = `${my - 30}px`;
+            explosion.style.left = `${(planeRect.left + missileRect.left) / 2 + (planeRect.width + missileRect.width) / 4 - 40}px`;
+            explosion.style.top = `${(planeRect.top + missileRect.top) / 2 + (planeRect.height + missileRect.height) / 4 - 40}px`;
+            explosion.style.width = '80px';
+            explosion.style.height = '80px';
             explosion.style.pointerEvents = 'none';
             explosion.style.zIndex = '999';
             planesContainer.appendChild(explosion);
-            setTimeout(() => explosion.remove(), 500);
+            setTimeout(() => explosion.remove(), 600);
             // Füze ve uçağı yok et
             plane.remove();
             missileEl.remove();
@@ -316,20 +378,83 @@
       if (missileRespawnTimeout) clearTimeout(missileRespawnTimeout);
     }
 
-    // Toggle mantığı
+    // Kırmızı uçağın serbest uçuşu için değişkenler
+    let freeFlightActive = false;
+    let freeFlightPlane = null;
+    let freeFlightPos = { x: 0, y: 0 };
+    let freeFlightAngle = 0; // rad
+    let freeFlightAngularVelocity = 0;
+    let freeFlightSpeed = 2.2; // px/frame
+    let freeFlightAnimId = null;
+
+    function startFreeFlightPlane() {
+      // Önce eskiyi temizle
+      if (freeFlightPlane) freeFlightPlane.remove();
+      cancelAnimationFrame(freeFlightAnimId);
+      freeFlightActive = true;
+      // Uçak oluştur
+      freeFlightPlane = document.createElement('img');
+      freeFlightPlane.src = 'uçak.png';
+      freeFlightPlane.alt = 'kontrollü uçak';
+      freeFlightPlane.style.position = 'absolute';
+      freeFlightPlane.style.width = '64px';
+      freeFlightPlane.style.height = '64px';
+      freeFlightPlane.style.pointerEvents = 'none';
+      freeFlightPlane.style.zIndex = '300';
+      freeFlightPlane.style.filter = 'drop-shadow(0 0 8px #f00) saturate(2)';
+      planesContainer.appendChild(freeFlightPlane);
+      // Başlangıç pozisyonu ve açı
+      freeFlightPos.x = window.innerWidth / 2 - 32;
+      freeFlightPos.y = window.innerHeight / 2 - 32;
+      freeFlightAngle = 0;
+      freeFlightAnimId = requestAnimationFrame(freeFlightAnim);
+    }
+
+    function freeFlightAnim() {
+      if (!freeFlightActive) return;
+      // Açıyı güncelle
+      freeFlightAngle += freeFlightAngularVelocity;
+      // Pozisyonu güncelle
+      freeFlightPos.x += Math.cos(freeFlightAngle) * freeFlightSpeed;
+      freeFlightPos.y += Math.sin(freeFlightAngle) * freeFlightSpeed;
+      // Ekran dışına çıkarsa başa sar
+      if (freeFlightPos.x < -64) freeFlightPos.x = window.innerWidth;
+      if (freeFlightPos.x > window.innerWidth) freeFlightPos.x = -64;
+      if (freeFlightPos.y < -64) freeFlightPos.y = window.innerHeight;
+      if (freeFlightPos.y > window.innerHeight) freeFlightPos.y = -64;
+      // Uçağı konumlandır
+      freeFlightPlane.style.left = `${freeFlightPos.x}px`;
+      freeFlightPlane.style.top = `${freeFlightPos.y}px`;
+      freeFlightPlane.style.transform = `rotate(${freeFlightAngle * 180 / Math.PI + 45}deg)`;
+      freeFlightAnimId = requestAnimationFrame(freeFlightAnim);
+    }
+
+    function stopFreeFlightPlane() {
+      freeFlightActive = false;
+      if (freeFlightPlane) freeFlightPlane.remove();
+      cancelAnimationFrame(freeFlightAnimId);
+    }
+
+    // Toggle mantığı güncelle
+    controlToggle.onchange = function() {
+      controlActive = controlToggle.checked;
+      if (controlActive && planeToggle.checked) {
+        stopPlanesOnEllipse();
+        startFreeFlightPlane();
+      } else {
+        stopFreeFlightPlane();
+        if (planeToggle.checked) startPlanesOnEllipse();
+      }
+    };
+    // Uçak toggle'ı değişirse kontrolü de kapat
     planeToggle.onchange = function() {
       if (animationStarted && planeToggle.checked) {
         startPlanesOnEllipse();
       } else {
         stopPlanesOnEllipse();
       }
-    };
-    missileToggle.onchange = function() {
-      if (animationStarted && missileToggle.checked) {
-        startMissile();
-      } else {
-        stopMissile();
-      }
+      controlLabel.style.display = 'none';
+      controlToggle.checked = false;
     };
 
     // Başlangıçta hiçbir animasyon başlamasın
@@ -365,6 +490,120 @@
       if (event.target === modal) {
         modal.classList.remove('active');
       }
+    };
+
+    function setControlledPlane() {
+      // Uçaklardan ilkini kırmızı yap ve kontrolü başlat
+      const planes = Array.from(planesContainer.querySelectorAll('img')).filter(img => img.src.includes('uçak.png'));
+      if (planes.length === 0) return;
+      controlledPlaneIndex = 0;
+      controlledPlane = planes[controlledPlaneIndex];
+      controlledPlane.style.filter = 'drop-shadow(0 0 8px #f00) saturate(2)';
+      controlledPlane.style.zIndex = '300';
+      // Pozisyonu koru
+      controlledPlane.style.left = `${controlPos.x}px`;
+      controlledPlane.style.top = `${controlPos.y}px`;
+      controlledPlane.style.transform = 'rotate(45deg)';
+      cancelAnimationFrame(controlAnimId);
+      controlAnimId = requestAnimationFrame(controlPlaneAnim);
+    }
+
+    function removeControlledPlane() {
+      if (controlledPlane) {
+        controlledPlane.style.filter = '';
+        controlledPlane.style.zIndex = '200';
+      }
+      controlledPlane = null;
+      cancelAnimationFrame(controlAnimId);
+    }
+
+    function controlPlaneAnim() {
+      if (!controlledPlane) return;
+      controlledPlane.style.left = `${controlPos.x}px`;
+      controlledPlane.style.top = `${controlPos.y}px`;
+      controlledPlane.style.transform = 'rotate(45deg)';
+      controlAnimId = requestAnimationFrame(controlPlaneAnim);
+    }
+
+    // Klavye ile kontrol (sağ/sol basılı tutma)
+    window.addEventListener('keydown', function(e) {
+      if (!controlActive || !freeFlightActive) return;
+      const step = 0.03;
+      if (e.key === 'ArrowLeft') freeFlightAngularVelocity = -step;
+      if (e.key === 'ArrowRight') freeFlightAngularVelocity = step;
+    });
+    window.addEventListener('keyup', function(e) {
+      if (!controlActive || !freeFlightActive) return;
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') freeFlightAngularVelocity = 0;
+    });
+    // Dokunmatik sürükleme ile kontrol (mobil, sağ/sol basılı tutma benzeri)
+    let touchStartX = null;
+    window.addEventListener('touchstart', function(e) {
+      if (!controlActive || !freeFlightActive) return;
+      const touch = e.touches[0];
+      touchStartX = touch.clientX;
+    });
+    window.addEventListener('touchmove', function(e) {
+      if (!controlActive || !freeFlightActive || touchStartX === null) return;
+      const touch = e.touches[0];
+      const dx = touch.clientX - touchStartX;
+      const step = 0.03;
+      if (dx > 10) freeFlightAngularVelocity = step;
+      else if (dx < -10) freeFlightAngularVelocity = -step;
+      else freeFlightAngularVelocity = 0;
+    });
+    window.addEventListener('touchend', function() {
+      freeFlightAngularVelocity = 0;
+      touchStartX = null;
+    });
+
+    // Hamburger ve menü
+    const hamburger = document.getElementById('hamburger');
+    const sideMenu = document.getElementById('sideMenu');
+    const menuMain = document.getElementById('menuMain');
+    const menuAbisi = document.getElementById('menuAbisi');
+    const abisiPage = document.getElementById('abisiPage');
+    const abisiBtn = document.getElementById('abisiBtn');
+
+    hamburger.onclick = function() {
+      sideMenu.style.display = sideMenu.style.display === 'flex' ? 'none' : 'flex';
+    };
+    menuMain.onclick = function() {
+      abisiPage.style.display = 'none';
+      document.body.style.background = "url('bulutlar.webp') center center / cover no-repeat fixed";
+      sideMenu.style.display = 'none';
+      // Ana sayfa elementlerini göster
+      document.querySelectorAll('body > *:not(#hamburger):not(#sideMenu):not(#abisiPage)').forEach(e => e.style.display = '');
+    };
+    menuAbisi.onclick = function() {
+      abisiPage.style.display = 'flex';
+      document.body.style.background = "#222";
+      sideMenu.style.display = 'none';
+      // Ana sayfa elementlerini gizle
+      document.querySelectorAll('body > *:not(#hamburger):not(#sideMenu):not(#abisiPage)').forEach(e => e.style.display = 'none');
+    };
+    abisiBtn.onclick = function() {
+      confetti({
+        particleCount: 120,
+        spread: 90,
+        origin: { y: 0.6 }
+      });
+      abisiName.style.display = 'block';
+      // At animasyonu
+      atAnim.style.display = 'block';
+      atAnim.style.left = '-300px';
+      let atX = -300;
+      const atTarget = window.innerWidth + 200;
+      function animateAt() {
+        atX += 6;
+        atAnim.style.left = atX + 'px';
+        if (atX < atTarget) {
+          requestAnimationFrame(animateAt);
+        } else {
+          atAnim.style.display = 'none';
+        }
+      }
+      animateAt();
     };
   </script>
 </body>
